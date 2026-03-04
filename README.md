@@ -3,6 +3,27 @@
 A cross-platform graphical interface and backend system for processing and streaming media in real time using Python, OpenCV, .NET, and Node.js.
 
 ---
+## 2026 Endringer
+Fjernet PeerJS og Python-backend avhengighet
+Kobler nå direkte til MediaMTX WHEP endpoints:
+http://10.0.0.2:8889/video0/whep
+http://10.0.0.2:8889/video1/whep
+http://10.0.0.2:8889/video2/whep
+
+Før gikk kamera til gstreamer python webrtc så frontend
+Nå går kamera til mediatmx og direkte til frontend
+
+Frontend fil WebRTCStream.tsx har ny funksjon connectToMediaMTX, her må evt ny grid settes opp for docking kamera.
+
+Python GUI_Camerafeed_Main.py og TestCamerafeed_Main.py har fått nye RTSP addresser for feed som kan forhåpentligvis brukes til docking osv
+
+Jetson nano:
+Opprettet mediamtx.service
+All kamera styres fra mediamtx.yml, se paths i filen for å legge for å evt legge til docking camera
+
+Kamera:
+Web-visning (WebRTC): http://10.0.0.2:8889/videoX (Lavest forsinkelse)
+RTSP-strøm: rtsp://10.0.0.2:8554/videoX (For VLC, OpenCV eller GUI)
 
 ## 📖 Table of Contents
 

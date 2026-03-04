@@ -1,5 +1,6 @@
 import threading
 import time
+import os
 from Backend.PythonScripts.camerafeed.Main_Classes.autonomous_transect_main import AutonomousTransect
 from camerafeed.Main_Classes.grass_monitor_main import SeagrassMonitor
 from camerafeed.Main_Classes.autonomous_docking_main import AutonomousDocking
@@ -8,46 +9,66 @@ import multiprocessing as mp
 import datetime
 import random
 
+# Set FFmpeg options for low latency RTSP (UDP transport)
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp|fflags;nobuffer|flags;low_delay"
+
 
 X_AXIS = 1
 Y_AKSE = 0
 Z_AKSE = 6
 R_AKSE = 2
 
-GST_FEED_STEREO_L = "-v udpsrc multicast-group=224.1.1.1 auto-multicast=true port=5000 ! application/x-rtp, media=video, clock-rate=90000, encoding-name=H264, payload=96 ! rtph264depay ! h264parse ! decodebin ! videoconvert ! appsink sync=false"
-GST_FEED_STEREO_R = "-v udpsrc multicast-group=224.1.1.1 auto-multicast=true port=5001 ! application/x-rtp, media=video, clock-rate=90000, encoding-name=H264, payload=96 ! rtph264depay ! h264parse ! decodebin ! videoconvert ! appsink sync=false"
-GST_FEED_DOWN = "-v udpsrc multicast-group=224.1.1.1 auto-multicast=true port=5002 ! application/x-rtp, media=video, clock-rate=90000, encoding-name=H264, payload=96 ! rtph264depay ! h264parse ! decodebin ! videoconvert ! appsink sync=false"
-GST_FEED_MANIPULATOR = "-v udpsrc multicast-group=224.1.1.1 auto-multicast=true port=5003 ! application/x-rtp, media=video, clock-rate=90000, encoding-name=H264, payload=96 ! rtph264depay ! h264parse ! decodebin ! videoconvert ! appsink sync=false"
+# MediaMTX camera feeds (RTSP)
+RTSP_FEED_STEREO_L = "rtsp://10.0.0.2:8554/video0"
+RTSP_FEED_STEREO_R = "rtsp://10.0.0.2:8554/video1"
+RTSP_FEED_DOWN = "rtsp://10.0.0.2:8554/video2"
+RTSP_FEED_MANIPULATOR = "rtsp://10.0.0.2:8554/video2"
 
 class Camera:
-    def __init__(self, name, gst_feed = None):
-        self.name = name # Name of camera
-        self.gst = gst_feed # Gstreamer feed
+    def __init__(self, name, rtsp_url=None):
+        self.name = name  # Name of camera
+        self.rtsp_url = rtsp_url  # RTSP URL
+        self.frame = None
+        self.running = False
+        self.thread = None
+        self.lock = threading.Lock()
+
+    def _read_thread(self):
+        """Continuously read frames in background thread to avoid buffering"""
+        while self.running:
+            ret, frame = self.cam.read()
+            if ret:
+                with self.lock:
+                    self.frame = frame
 
     def get_frame(self):
-        ret, frame = self.cam.read()
-        if not ret:
-            print("Error reading frame")
-            return
-        return frame
+        with self.lock:
+            return self.frame
     
     def open_cam(self):
-        if self.gst is None:
+        if self.rtsp_url is None:
             self.cam = cv2.VideoCapture(0)
-            if not self.isOpened:
-                print(f"Error opening camera {self.name}")
-                return False
-            print(f"{self.name} Camera opened")
-            return True
         else:
-            self.cam = cv2.VideoCapture(self.gst, cv2.CAP_GSTREAMER)
-            if not self.isOpened:
-                print("Error opening camera")
-                return False
-            print(f"{self.name} Camera opened")
-            return True
+            # Use FFmpeg backend with optimized settings for low latency
+            self.cam = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
+            self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffer
+        
+        if not self.isOpened:
+            print(f"Error opening camera {self.name}")
+            return False
+        
+        print(f"{self.name} Camera opened")
+        
+        # Start background thread to continuously read frames
+        self.running = True
+        self.thread = threading.Thread(target=self._read_thread, daemon=True)
+        self.thread.start()
+        return True
             
     def release_cam(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=1.0)
         self.cam.release()
         
     @property
@@ -63,16 +84,16 @@ class CameraManager:
     def add_cameras(self, *camera_names):
         for name in camera_names:
             if name == "StereoL":
-                cam = Camera("StereoL", GST_FEED_STEREO_L)
+                cam = Camera("StereoL", RTSP_FEED_STEREO_L)
                 self.active_cameras.append(cam)
             elif name == "StereoR":
-                cam = Camera("StereoR", GST_FEED_STEREO_R)
+                cam = Camera("StereoR", RTSP_FEED_STEREO_R)
                 self.active_cameras.append(cam)
             elif name == "Down":
-                cam = Camera("Down", GST_FEED_DOWN)
+                cam = Camera("Down", RTSP_FEED_DOWN)
                 self.active_cameras.append(cam)
             elif name == "Manip":
-                cam = Camera("Manip", GST_FEED_MANIPULATOR)
+                cam = Camera("Manip", RTSP_FEED_MANIPULATOR)
                 self.active_cameras.append(cam)
             elif name == "Manual":
                 cam = Camera("Manual")
