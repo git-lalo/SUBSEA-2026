@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/dts-v1/;
+/plugin/;
+
+/ {
+    overlay-name = "UiS Subsea DTO CAN,PWM,I2C";
+    jetson-header-name = "Jetson 40pin Header";
+    compatible = "nvidia,p3449-0000-b00+p3448-0000-b00", "nvidia,p3449-0000-a02+p3448-0000-a02";
+
+    fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            clocks {
+                can_clock: can_clock {
+                    compatible = "fixed-clock";
+                    #clock-cells = <0>;
+                    clock-frequency = <10000000>;
+                    clock-accuracy = <100>;
+                };
+            };
+        };
+    };
+
+    fragment@1 {
+        target = <&spi0>;
+        __overlay__ {
+            status = "okay";
+            #address-cells = <1>;
+            #size-cells = <0>;
+            
+            mcp2515: mcp2515@0 {
+                compatible = "microchip,mcp2515";
+                reg = <0>;
+                spi-max-frequency = <5000000>;
+                nvidia,enable-hw-based-cs;
+                nvidia,rx-clk-tap-delay = <0x7>;
+                clocks = <&can_clock>;
+                interrupt-parent = <&gpio>;
+                interrupts = <0 0 1>;  // GPIO Z0
+                
+                controller-data {
+                    nvidia,cs-setup-clk-count = <0x1e>;
+                    nvidia,cs-hold-clk-count = <0x1e>;
+                    nvidia,rx-clk-tap-delay = <0x1f>;
+                    nvidia,tx-clk-tap-delay = <0x0>;
+                };
+            };
+        };
+    };
+
+    fragment@2 {
+        target = <&pinmux>;
+        __overlay__ {
+            pinctrl-names = "default";
+            pinctrl-0 = <&hdr40_pinmux>;
+
+            hdr40_pinmux: header-40pin-pinmux {
+                pin19 {
+                    nvidia,pins = "spi1_mosi_pc0";
+                    nvidia,function = "spi1";
+                    nvidia,pull = <1>;        // PULL_DOWN
+                    nvidia,tristate = <0>;    // DISABLE
+                    nvidia,enable-input = <1>; // ENABLE
+                };
+                pin21 {
+                    nvidia,pins = "spi1_miso_pc1";
+                    nvidia,function = "spi1";
+                    nvidia,pull = <1>;
+                    nvidia,tristate = <0>;
+                    nvidia,enable-input = <1>;
+                };
+                pin23 {
+                    nvidia,pins = "spi1_sck_pc2";
+                    nvidia,function = "spi1";
+                    nvidia,pull = <1>;
+                    nvidia,tristate = <0>;
+                    nvidia,enable-input = <1>;
+                };
+                pin24 {
+                    nvidia,pins = "spi1_cs0_pc3";
+                    nvidia,function = "spi1";
+                    nvidia,pull = <2>;        // PULL_UP
+                    nvidia,tristate = <0>;
+                    nvidia,enable-input = <1>;
+                };
+                pin27 {
+                    nvidia,pins = "gen1_i2c_sda_pj0";
+                    nvidia,function = "i2c1";
+                    nvidia,pull = <0>;
+                    nvidia,tristate = <0>;
+                    nvidia,enable-input = <1>;
+                    nvidia,io-high-voltage = <1>;
+                };
+                pin28 {
+                    nvidia,pins = "gen1_i2c_scl_pj1";
+                    nvidia,function = "i2c1";
+                    nvidia,pull = <0>;
+                    nvidia,tristate = <0>;
+                    nvidia,enable-input = <1>;
+                    nvidia,io-high-voltage = <1>;
+                };
+                pin32 {
+                    nvidia,pins = "lcd_bl_pwm_pv0";
+                    nvidia,function = "pwm0";
+                    nvidia,pull = <0>;
+                    nvidia,tristate = <0>;
+                    nvidia,enable-input = <0>;
+                };
+                pin33 {
+                    nvidia,pins = "pe6";
+                    nvidia,function = "pwm2";
+                    nvidia,pull = <0>;
+                    nvidia,tristate = <0>;
+                    nvidia,enable-input = <0>;
+                };
+            };
+        };
+    };
+};

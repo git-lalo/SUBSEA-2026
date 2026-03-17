@@ -1,0 +1,13 @@
+[Unit]
+Description=Set up CAN0 interface
+Requires=spi.service
+After=spi.service
+
+[Service]
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/ip link set can0 up type can bitrate 500000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
